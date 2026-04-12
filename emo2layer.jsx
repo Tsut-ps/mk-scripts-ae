@@ -261,6 +261,19 @@
     return count;
   }
 
+  function isCtrlPrefixedLayerName(name) {
+    if (!name) return false;
+    return name.indexOf(CTRL_PREFIX) === 0 || name.indexOf("[Emo] ") === 0;
+  }
+
+  function hasCtrlPrefixedLayer(ctrlComp) {
+    if (!ctrlComp) return false;
+    for (var i = 1; i <= ctrlComp.numLayers; i++) {
+      if (isCtrlPrefixedLayerName(ctrlComp.layer(i).name)) return true;
+    }
+    return false;
+  }
+
   // ══════════════════════════════════════════════════════════════════
   // マーカー書き込み
   // ══════════════════════════════════════════════════════════════════
@@ -341,12 +354,27 @@
   targetStatusInfo.preferredSize = [16, BUTTON_HEIGHT];
 
   topRow.add("statictext", undefined, "制御");
-  var ctrlStatusInfo = topRow.add("statictext", undefined, "");
-  ctrlStatusInfo.preferredSize = [16, BUTTON_HEIGHT];
-
-  topRow.add("statictext", undefined, "Emo");
   var ctrlLayerInfo = topRow.add("statictext", undefined, "");
   ctrlLayerInfo.preferredSize = [16, BUTTON_HEIGHT];
+
+  function setCheckColor(textNode, rgba) {
+    if (!textNode || !textNode.graphics) return;
+    var g = textNode.graphics;
+    g.foregroundColor = g.newPen(g.PenType.SOLID_COLOR, rgba, 1);
+  }
+
+  function setCheckState(textNode, checked) {
+    if (!textNode) return;
+    textNode.text = "✓";
+    // checked=true は緑、false は目立たないグレー
+    setCheckColor(
+      textNode,
+      checked ? [0.1, 0.7, 0.2, 1] : [0.35, 0.35, 0.35, 1],
+    );
+  }
+
+  setCheckState(targetStatusInfo, false);
+  setCheckState(ctrlLayerInfo, false);
 
   var topSpacer = topRow.add("group");
   topSpacer.alignment = ["fill", "center"];
@@ -475,15 +503,12 @@
 
   function updateInfo(targetComp) {
     var ctrlComp = getSelectedComp(ctrlRow.dropdown);
-    var ctrlLayer =
-      targetComp && ctrlComp
-        ? findCtrlLayerInComp(ctrlComp, targetComp.name, targetComp.time)
-        : null;
+    var hasCtrlLayer = hasCtrlPrefixedLayer(ctrlComp);
 
-    targetStatusInfo.text = targetComp ? "✓" : "";
-    ctrlStatusInfo.text = ctrlComp ? "✓" : "";
-    ctrlLayerInfo.text = ctrlLayer ? "✓" : "";
-    registeredCountInfo.text = "登録レイヤー: " + countRegisteredLayers(targetComp);
+    setCheckState(targetStatusInfo, countRegisteredLayers(targetComp) > 0);
+    setCheckState(ctrlLayerInfo, hasCtrlLayer);
+    registeredCountInfo.text =
+      "登録レイヤー: " + countRegisteredLayers(targetComp);
   }
 
   // ── ドロップダウン再構築 ─────────────────────────────────────────
@@ -757,7 +782,7 @@
   fileSelectGroup.alignChildren = ["left", "center"];
   fileSelectGroup.alignment = ["fill", "top"];
 
-  fileSelectGroup.add("statictext", undefined, "labファイル:");
+  fileSelectGroup.add("statictext", undefined, "labファイル");
 
   var filePathText = fileSelectGroup.add(
     "edittext",
