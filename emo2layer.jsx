@@ -4,27 +4,31 @@
  */
 
 (function emo2layer(thisObj) {
-  // 共通定数
+  // ══════════════════════════════════════════════════════════════════
+  // 定数
+  // ══════════════════════════════════════════════════════════════════
   var CTRL_PREFIX = "[C] ";
   var EXPR_SIGNATURE = "emo2layerCtrlMarker";
   var BUTTON_HEIGHT = 24;
   var LABEL_WIDTH = 40;
-  var DROPDOWN_MIN_WIDTH = 140;
-  var GRID_MIN_BUTTON_WIDTH = 60;
+  var DROPDOWN_MIN_W = 140;
+  var GRID_MIN_BTN_W = 60;
   var GRID_SPACING = 6;
   var MARKER_EPSILON = 0.0001;
+  var PANEL_MARGIN = 8;
 
-  // アクティブなコンポを返す
+  // ══════════════════════════════════════════════════════════════════
+  // コンポ ユーティリティ
+  // ══════════════════════════════════════════════════════════════════
+
   function getActiveComp() {
     var item = app.project ? app.project.activeItem : null;
     return item && item instanceof CompItem ? item : null;
   }
 
-  // プロジェクト内のコンポ一覧
   function getProjectComps() {
     var comps = [];
     if (!app.project) return comps;
-
     for (var i = 1; i <= app.project.numItems; i++) {
       var item = app.project.item(i);
       if (item instanceof CompItem) comps.push(item);
@@ -33,6 +37,7 @@
   }
 
   function findCompByName(name) {
+    if (!name) return null;
     var comps = getProjectComps();
     for (var i = 0; i < comps.length; i++) {
       if (comps[i].name === name) return comps[i];
@@ -44,41 +49,56 @@
     return dropdown.selection ? findCompByName(dropdown.selection.text) : null;
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  // CTRL レイヤー ユーティリティ
+  // ══════════════════════════════════════════════════════════════════
+
   function getCtrlLayerName(targetCompName) {
     return CTRL_PREFIX + targetCompName;
   }
 
-  // 現在時刻に有効な CTRL レイヤーを探す
+  /**
+   * ctrlComp 内で time に有効な CTRL レイヤーを探す。
+   * 時刻に合うものがなければ最初に見つかったもの（フォールバック）を返す。
+   */
   function findCtrlLayerInComp(ctrlComp, targetCompName, time) {
     if (!ctrlComp) return null;
-
     var ctrlName = getCtrlLayerName(targetCompName);
     var fallback = null;
-
     for (var i = 1; i <= ctrlComp.numLayers; i++) {
       var layer = ctrlComp.layer(i);
       if (layer.name !== ctrlName) continue;
       if (!fallback) fallback = layer;
       if (time >= layer.inPoint && time < layer.outPoint) return layer;
     }
-
     return fallback;
   }
 
+  /**
+   * CTRL レイヤーを作成する。
+   * inPoint の直接代入は読み取り専用になるバージョンがあるため
+   * startTime を操作してコンプ全体をカバーさせる。
+   */
   function createCtrlLayer(ctrlComp, targetCompName) {
-    var layer = findCtrlLayerInComp(ctrlComp, targetCompName, 0);
-    if (layer) return layer;
+    var existing = findCtrlLayerInComp(ctrlComp, targetCompName, 0);
+    if (existing) return existing;
 
-    layer = ctrlComp.layers.addNull(ctrlComp.duration);
+    var layer = ctrlComp.layers.addNull(ctrlComp.duration);
     layer.name = getCtrlLayerName(targetCompName);
     layer.startTime = 0;
-    layer.inPoint = 0;
-    layer.outPoint = ctrlComp.duration;
+    // outPoint をコンプ末尾に合わせる（startTime 操作後に設定）
+    try {
+      layer.outPoint = ctrlComp.duration;
+    } catch (e) {}
     layer.shy = true;
     layer.guideLayer = true;
     layer.label = 11;
     return layer;
   }
+
+  // ══════════════════════════════════════════════════════════════════
+  // エクスプレッション
+  // ══════════════════════════════════════════════════════════════════
 
   function buildOpacityExpression(ctrlCompName, targetCompName) {
     return [
@@ -119,18 +139,21 @@
     }
   }
 
-  // 選択レイヤーを登録する
+  // ══════════════════════════════════════════════════════════════════
+  // 登録 / 解除
+  // ══════════════════════════════════════════════════════════════════
+
   function registerSelectedLayers(targetComp, ctrlCompName) {
-    var selectedLayers = targetComp.selectedLayers;
-    if (!selectedLayers || selectedLayers.length === 0) return 0;
+    var selected = targetComp.selectedLayers;
+    if (!selected || selected.length === 0) return 0;
 
     var expression = buildOpacityExpression(ctrlCompName, targetComp.name);
     var count = 0;
 
     app.beginUndoGroup("emo2layer: Register");
     try {
-      for (var i = 0; i < selectedLayers.length; i++) {
-        var layer = selectedLayers[i];
+      for (var i = 0; i < selected.length; i++) {
+        var layer = selected[i];
         if (!layer) continue;
         layer.transform.opacity.expression = expression;
         layer.enabled = true;
@@ -139,11 +162,33 @@
     } finally {
       app.endUndoGroup();
     }
-
     return count;
   }
 
-  // 登録済みレイヤー名を重複なしで集める
+  function unregisterSelectedLayers(targetComp) {
+    var selected = targetComp.selectedLayers;
+    if (!selected || selected.length === 0) return 0;
+
+    var count = 0;
+    app.beginUndoGroup("emo2layer: Unregister");
+    try {
+      for (var i = 0; i < selected.length; i++) {
+        var layer = selected[i];
+        if (!layer || !isRegistered(layer)) continue;
+        layer.transform.opacity.expression = "";
+        layer.transform.opacity.setValue(100);
+        count++;
+      }
+    } finally {
+      app.endUndoGroup();
+    }
+    return count;
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // 登録レイヤー名の収集
+  // ══════════════════════════════════════════════════════════════════
+
   function collectMarkerNames(targetComp) {
     var names = [];
     var seen = {};
@@ -155,25 +200,24 @@
       seen[layer.name] = true;
       names.push(layer.name);
     }
-
     return names;
   }
 
   function countRegisteredLayers(targetComp) {
     var count = 0;
     if (!targetComp) return 0;
-
     for (var i = 1; i <= targetComp.numLayers; i++) {
       if (isRegistered(targetComp.layer(i))) count++;
     }
-
     return count;
   }
 
-  // 同時刻のマーカーは置き換える
+  // ══════════════════════════════════════════════════════════════════
+  // マーカー書き込み
+  // ══════════════════════════════════════════════════════════════════
+
   function removeMarkerAtTime(layer, time) {
     if (!layer) return;
-
     try {
       var marker = layer.property("Marker");
       for (var i = marker.numKeys; i >= 1; i--) {
@@ -184,7 +228,6 @@
     } catch (e) {}
   }
 
-  // CTRL レイヤーへマーカー名を書き込む
   function writeMarkerName(targetComp, ctrlComp, markerName) {
     var ctrlLayer = findCtrlLayerInComp(
       ctrlComp,
@@ -202,103 +245,55 @@
     } finally {
       app.endUndoGroup();
     }
-
     return true;
   }
 
-  function lockButtonSize(button, width, height) {
-    button.preferredSize = [width, height];
-    button.minimumSize = [width, height];
-    button.maximumSize = [width, height];
+  // ══════════════════════════════════════════════════════════════════
+  // グリッドレイアウト計算
+  // ══════════════════════════════════════════════════════════════════
+
+  /** markerGridPanel の内側マージンを安全に取得 */
+  function getPanelMargin() {
+    var m = markerGridPanel.margins;
+    if (typeof m === "number") return m;
+    if (m && typeof m.left === "number") return m.left;
+    return PANEL_MARGIN;
   }
 
-  // 対象・制御 の行 UI
-  function addCompRow(parent, labelText, buttonText) {
-    var row = parent.add("group");
-    row.orientation = "row";
-    row.alignment = ["fill", "top"];
-    row.alignChildren = ["left", "center"];
-    row.spacing = 6;
-
-    var field = row.add("group");
-    field.orientation = "row";
-    field.alignment = ["fill", "center"];
-    field.alignChildren = ["left", "center"];
-    field.spacing = 6;
-
-    var label = field.add("statictext", undefined, labelText);
-    label.preferredSize = [LABEL_WIDTH, BUTTON_HEIGHT];
-
-    var dropdown = field.add("dropdownlist", undefined, []);
-    dropdown.alignment = ["fill", "center"];
-    dropdown.minimumSize = [DROPDOWN_MIN_WIDTH, BUTTON_HEIGHT];
-    dropdown.preferredSize.height = BUTTON_HEIGHT;
-
-    var button = row.add("button", undefined, buttonText);
-    button.alignment = ["right", "center"];
-    lockButtonSize(button, 120, BUTTON_HEIGHT);
-
-    return { dropdown: dropdown, button: button };
-  }
-
-  // ドロップダウンをコンポ一覧で作り直す
-  function rebuildDropdown(dropdown, selectedName) {
-    var comps = getProjectComps();
-    dropdown.removeAll();
-
-    for (var i = 0; i < comps.length; i++) {
-      dropdown.add("item", comps[i].name);
-    }
-
-    if (dropdown.items.length === 0) return;
-
-    for (var j = 0; j < dropdown.items.length; j++) {
-      if (dropdown.items[j].text === selectedName) {
-        dropdown.selection = j;
-        return;
-      }
-    }
-
-    dropdown.selection = 0;
-  }
-
-  // パネル幅に応じてマーカーボタンの列数を決める
   function getGridColumns() {
     if (columnDropdown.selection && columnDropdown.selection.text !== "Auto") {
-      return parseInt(columnDropdown.selection.text, 10);
+      return parseInt(columnDropdown.selection.text, 10) || 2;
     }
-
     var width = markerGridPanel.size ? markerGridPanel.size.width : 360;
-    var columns = Math.floor(width / (GRID_MIN_BUTTON_WIDTH + GRID_SPACING));
+    var columns = Math.floor(width / (GRID_MIN_BTN_W + GRID_SPACING));
     if (columns < 1) columns = 1;
     if (columns > 4) columns = 4;
     return columns;
   }
 
   function getGridButtonWidth(columns) {
-    var width = markerGridPanel.size ? markerGridPanel.size.width : 360;
-    var margins = markerGridPanel.margins;
-    var innerWidth = width - margins.left - margins.right;
-    var buttonWidth = Math.floor(
-      (innerWidth - (columns - 1) * GRID_SPACING) / columns,
-    );
-    if (buttonWidth < GRID_MIN_BUTTON_WIDTH)
-      buttonWidth = GRID_MIN_BUTTON_WIDTH;
-    return buttonWidth;
+    var panelWidth = markerGridPanel.size ? markerGridPanel.size.width : 360;
+    var margin = getPanelMargin();
+    var innerWidth = panelWidth - margin * 2;
+    var bw = Math.floor((innerWidth - (columns - 1) * GRID_SPACING) / columns);
+    return bw < GRID_MIN_BTN_W ? GRID_MIN_BTN_W : bw;
   }
+
+  // ══════════════════════════════════════════════════════════════════
+  // UI 構築
+  // ══════════════════════════════════════════════════════════════════
 
   var win =
     thisObj instanceof Panel
       ? thisObj
-      : new Window("palette", "emo2layer", undefined, {
-          resizeable: true,
-        });
+      : new Window("palette", "emo2layer", undefined, { resizeable: true });
 
   win.orientation = "column";
   win.alignChildren = ["fill", "top"];
   win.spacing = 8;
   win.margins = 10;
 
+  // ── タイトル行 ──────────────────────────────────────────────────
   var topRow = win.add("group");
   topRow.orientation = "row";
   topRow.alignment = ["fill", "top"];
@@ -306,23 +301,58 @@
   topRow.spacing = 6;
 
   var title = topRow.add("statictext", undefined, "レイヤーセレクター");
-  title.graphics.font = ScriptUI.newFont(
-    title.graphics.font.name,
-    "BOLD",
-    title.graphics.font.size + 1,
-  );
+  try {
+    title.graphics.font = ScriptUI.newFont(
+      title.graphics.font.name,
+      "BOLD",
+      title.graphics.font.size + 1,
+    );
+  } catch (e) {}
 
   var topSpacer = topRow.add("group");
   topSpacer.alignment = ["fill", "center"];
 
+  var refreshAllBtn = topRow.add("button", undefined, "\u21BA");
+  refreshAllBtn.alignment = ["right", "center"];
+  refreshAllBtn.preferredSize = [28, BUTTON_HEIGHT];
+  refreshAllBtn.helpTip = "コンポ一覧を両方再取得";
+
   var helpBtn = topRow.add("button", undefined, "Help");
   helpBtn.alignment = ["right", "center"];
-  helpBtn.helpTip = "使い方を表示";
-  lockButtonSize(helpBtn, 64, BUTTON_HEIGHT);
+  helpBtn.preferredSize = [64, BUTTON_HEIGHT];
 
-  var targetRow = addCompRow(win, "対象", "レイヤー登録");
-  var ctrlRow = addCompRow(win, "制御", "CTRL作成");
+  // ── コンポ選択行（共通ファクトリ） ──────────────────────────────
+  function addCompRow(parent, labelText, btnText1, btnText2) {
+    var row = parent.add("group");
+    row.orientation = "row";
+    row.alignment = ["fill", "top"];
+    row.alignChildren = ["left", "center"];
+    row.spacing = 6;
 
+    var lbl = row.add("statictext", undefined, labelText);
+    lbl.preferredSize = [LABEL_WIDTH, BUTTON_HEIGHT];
+
+    var dropdown = row.add("dropdownlist", undefined, []);
+    dropdown.alignment = ["fill", "center"];
+    dropdown.minimumSize = [DROPDOWN_MIN_W, BUTTON_HEIGHT];
+    dropdown.preferredSize.height = BUTTON_HEIGHT;
+
+    var btn1 = row.add("button", undefined, btnText1);
+    btn1.preferredSize = [80, BUTTON_HEIGHT];
+
+    var btn2 = null;
+    if (btnText2) {
+      btn2 = row.add("button", undefined, btnText2);
+      btn2.preferredSize = [72, BUTTON_HEIGHT];
+    }
+
+    return { dropdown: dropdown, btn1: btn1, btn2: btn2 };
+  }
+
+  var targetRow = addCompRow(win, "対象", "レイヤー登録", "登録解除");
+  var ctrlRow = addCompRow(win, "制御", "CTRL 作成", null);
+
+  // ── ステータス情報 ───────────────────────────────────────────────
   var infoRow = win.add("group");
   infoRow.orientation = "row";
   infoRow.alignChildren = ["left", "center"];
@@ -332,6 +362,7 @@
   var ctrlStatusInfo = infoRow.add("statictext", undefined, "制御 -");
   var ctrlLayerInfo = infoRow.add("statictext", undefined, "CTRL -");
 
+  // ── グリッドヘッダー ─────────────────────────────────────────────
   var markerHeaderRow = win.add("group");
   markerHeaderRow.orientation = "row";
   markerHeaderRow.alignChildren = ["left", "center"];
@@ -353,9 +384,10 @@
   ]);
   columnDropdown.selection = 0;
 
+  // ── マーカーグリッド ─────────────────────────────────────────────
   var markerGridPanel = win.add("panel");
   markerGridPanel.alignment = ["fill", "fill"];
-  markerGridPanel.margins = 8;
+  markerGridPanel.margins = PANEL_MARGIN;
 
   var markerGrid = markerGridPanel.add("group");
   markerGrid.orientation = "column";
@@ -363,6 +395,7 @@
   markerGrid.alignment = ["fill", "fill"];
   markerGrid.spacing = GRID_SPACING;
 
+  // ── ステータスバー ───────────────────────────────────────────────
   var statusText = win.add(
     "statictext",
     undefined,
@@ -370,45 +403,57 @@
   );
   statusText.alignment = ["fill", "bottom"];
 
+  // ══════════════════════════════════════════════════════════════════
+  // 状態変数
+  // ══════════════════════════════════════════════════════════════════
   var currentMarkerNames = [];
   var currentSelectedMarker = null;
   var isRebuildingGrid = false;
+
+  // ══════════════════════════════════════════════════════════════════
+  // ヘルパー UI 関数
+  // ══════════════════════════════════════════════════════════════════
 
   function setStatus(text) {
     statusText.text = text;
   }
 
-  function showHelpDialog() {
-    var dialog = new Window("dialog", "使い方");
-    dialog.orientation = "column";
-    dialog.alignChildren = ["fill", "top"];
-    dialog.margins = 16;
-    dialog.spacing = 8;
-    dialog.add(
-      "statictext",
-      undefined,
-      "1. 対象コンポと制御コンポを選択します。",
-    );
-    dialog.add(
-      "statictext",
-      undefined,
-      "2. 必要なら CTRL作成 で制御用レイヤーを作ります。",
-    );
-    dialog.add(
-      "statictext",
-      undefined,
-      "3. 対象コンポでレイヤーを選択して レイヤー登録 を押します。",
-    );
-    dialog.add(
-      "statictext",
-      undefined,
-      "4. マーカーボタンを押すと、CTRLレイヤーの現在時間に名前を書き込みます。",
-    );
-    dialog.add("button", undefined, "閉じる", { name: "ok" });
-    dialog.show();
+  function lockButton(btn, locked) {
+    if (btn) btn.enabled = !locked;
   }
 
-  // 選択状態に応じて上部の情報表示を更新
+  /**
+   * 前提条件に応じてボタンの有効・無効を更新する
+   *   - CTRL 作成: 対象＋制御コンポが揃っていること
+   *   - レイヤー登録/解除: 対象＋制御コンポ＋アクティブコンプが対象と一致
+   *   - マーカーボタン: 対象＋制御コンプ＋CTRLレイヤーが揃っていること
+   */
+  function updateButtonStates() {
+    var targetComp = getSelectedComp(targetRow.dropdown);
+    var ctrlComp = getSelectedComp(ctrlRow.dropdown);
+    var activeComp = getActiveComp();
+
+    var hasTargetCtrl = targetComp && ctrlComp;
+    var isTargetActive =
+      targetComp && activeComp && activeComp.name === targetComp.name;
+    var ctrlLayer = hasTargetCtrl
+      ? findCtrlLayerInComp(ctrlComp, targetComp.name, targetComp.time)
+      : null;
+    var hasCtrlLayer = !!ctrlLayer;
+
+    lockButton(ctrlRow.btn1, !hasTargetCtrl);
+    lockButton(targetRow.btn1, !(hasTargetCtrl && isTargetActive));
+    lockButton(targetRow.btn2, !(hasTargetCtrl && isTargetActive));
+
+    // マーカーグリッド内のボタンは hasCtrlLayer で制御
+    for (var i = 0; i < markerGrid.children.length; i++) {
+      var row = markerGrid.children[i];
+      for (var j = 0; j < row.children.length; j++) {
+        row.children[j].enabled = hasCtrlLayer;
+      }
+    }
+  }
+
   function updateInfo(targetComp) {
     var ctrlComp = getSelectedComp(ctrlRow.dropdown);
     var ctrlLayer =
@@ -426,101 +471,89 @@
       currentMarkerNames.length;
   }
 
-  // リサイズ時は既存ボタンの幅だけ更新する
-  function resizeGridButtons() {
-    var columns = getGridColumns();
-    var buttonWidth = getGridButtonWidth(columns);
-
-    for (var i = 0; i < markerGrid.children.length; i++) {
-      var row = markerGrid.children[i];
-      for (var j = 0; j < row.children.length; j++) {
-        row.children[j].size = [buttonWidth, BUTTON_HEIGHT];
+  // ── ドロップダウン再構築 ─────────────────────────────────────────
+  function rebuildDropdown(dropdown, selectedName) {
+    var comps = getProjectComps();
+    dropdown.removeAll();
+    for (var i = 0; i < comps.length; i++) {
+      dropdown.add("item", comps[i].name);
+    }
+    if (dropdown.items.length === 0) return;
+    for (var j = 0; j < dropdown.items.length; j++) {
+      if (dropdown.items[j].text === selectedName) {
+        dropdown.selection = j;
+        return;
       }
     }
-
-    markerGrid.layout.layout(true);
-    markerGridPanel.layout.layout(true);
+    dropdown.selection = 0;
   }
 
-  // ボタンの並び自体を作り直す
+  // ══════════════════════════════════════════════════════════════════
+  // マーカーグリッド
+  // ══════════════════════════════════════════════════════════════════
+
+  /**
+   * ボタンを行優先（row-major）で並べる。
+   * 選択中のマーカー名には "✔ " prefix を表示。
+   * 前提条件が満たされない場合はボタンを disabled にする。
+   */
   function rebuildMarkerGrid() {
     if (isRebuildingGrid) return;
     isRebuildingGrid = true;
 
     try {
-      for (var i = markerGrid.children.length - 1; i >= 0; i--) {
-        markerGrid.remove(markerGrid.children[i]);
+      // 既存ボタン行を全削除
+      for (var d = markerGrid.children.length - 1; d >= 0; d--) {
+        markerGrid.remove(markerGrid.children[d]);
       }
 
       var columns = getGridColumns();
       var total = currentMarkerNames.length;
-      var rowsPerColumn = total > 0 ? Math.ceil(total / columns) : 0;
-      var buttonWidth = getGridButtonWidth(columns);
+      var rows = total > 0 ? Math.ceil(total / columns) : 0;
+      var btnWidth = getGridButtonWidth(columns);
 
-      for (var rowIndex = 0; rowIndex < rowsPerColumn; rowIndex++) {
-        var row = markerGrid.add("group");
-        row.orientation = "row";
-        row.alignment = ["fill", "top"];
-        row.alignChildren = ["left", "center"];
-        row.spacing = GRID_SPACING;
+      // 行優先（row-major）: 左→右、上→下
+      for (var r = 0; r < rows; r++) {
+        var rowGroup = markerGrid.add("group");
+        rowGroup.orientation = "row";
+        rowGroup.alignment = ["fill", "top"];
+        rowGroup.alignChildren = ["left", "center"];
+        rowGroup.spacing = GRID_SPACING;
 
-        for (var colIndex = 0; colIndex < columns; colIndex++) {
-          var index = colIndex * rowsPerColumn + rowIndex;
-          if (index >= total) break;
+        for (var c = 0; c < columns; c++) {
+          var idx = r * columns + c; // row-major index
+          if (idx >= total) break;
 
-          var markerName = currentMarkerNames[index];
-          var button = row.add(
-            "button",
-            undefined,
-            currentSelectedMarker === markerName
-              ? "[" + markerName + "]"
-              : markerName,
-          );
-          button.size = [buttonWidth, BUTTON_HEIGHT];
-          button.helpTip = markerName;
-          button.onClick = (function (name) {
+          var markerName = currentMarkerNames[idx];
+          var isSelected = currentSelectedMarker === markerName;
+          var label = isSelected ? "\u2714 " + markerName : markerName;
+
+          var btn = rowGroup.add("button", undefined, label);
+          btn.size = [btnWidth, BUTTON_HEIGHT];
+          btn.helpTip = markerName;
+
+          // クロージャでマーカー名をキャプチャ
+          btn.onClick = (function (name) {
             return function () {
               var targetComp = getSelectedComp(targetRow.dropdown);
               var ctrlComp = getSelectedComp(ctrlRow.dropdown);
+              if (!targetComp || !ctrlComp) return;
 
-              if (!targetComp) {
-                setStatus("対象コンポを選択してください。");
-                return;
-              }
-              if (!ctrlComp) {
-                setStatus("制御コンポを選択してください。");
-                return;
-              }
+              currentSelectedMarker =
+                currentSelectedMarker === name ? null : name;
 
-              var ctrlLayer = findCtrlLayerInComp(
-                ctrlComp,
-                targetComp.name,
-                targetComp.time,
-              );
-              if (!ctrlLayer) {
-                setStatus(
-                  "先に CTRL を作成してください。 " +
-                    ctrlComp.name +
-                    " に " +
-                    getCtrlLayerName(targetComp.name) +
-                    " が必要です。",
-                );
-                return;
+              if (currentSelectedMarker) {
+                if (!writeMarkerName(targetComp, ctrlComp, name)) {
+                  setStatus("マーカーの書き込みに失敗しました。");
+                  currentSelectedMarker = null;
+                } else {
+                  setStatus("マーカー「" + name + "」を書き込みました。");
+                }
+              } else {
+                setStatus("選択を解除しました。");
               }
-
-              currentSelectedMarker = name;
-              if (!writeMarkerName(targetComp, ctrlComp, name)) return;
 
               rebuildMarkerGrid();
-              setStatus(
-                "マーカー「" +
-                  name +
-                  "」を " +
-                  ctrlComp.name +
-                  " / " +
-                  ctrlLayer.name +
-                  " の現在時間に書き込みました。",
-              );
             };
           })(markerName);
         }
@@ -528,15 +561,29 @@
 
       markerGrid.layout.layout(true);
       markerGridPanel.layout.layout(true);
+      updateButtonStates();
     } finally {
       isRebuildingGrid = false;
     }
   }
 
+  /**
+   * リサイズ時: ボタン幅と列数を再計算してグリッドを再構築する。
+   * （列数が変わりうる Auto モードでは rebuildMarkerGrid が必要）
+   */
+  function resizeGrid() {
+    rebuildMarkerGrid();
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // リスト全体の再構築
+  // ══════════════════════════════════════════════════════════════════
+
   function rebuildList() {
     var targetComp = getSelectedComp(targetRow.dropdown);
     currentMarkerNames = collectMarkerNames(targetComp);
 
+    // 選択中のマーカーが登録レイヤーから消えていたらリセット
     if (currentSelectedMarker) {
       var found = false;
       for (var i = 0; i < currentMarkerNames.length; i++) {
@@ -551,19 +598,70 @@
     updateInfo(targetComp);
     rebuildMarkerGrid();
 
-    if (!targetComp) {
-      setStatus("対象コンポを選択してください。");
-    }
+    if (!targetComp) setStatus("対象コンポを選択してください。");
   }
+
+  // ══════════════════════════════════════════════════════════════════
+  // ヘルプダイアログ
+  // ══════════════════════════════════════════════════════════════════
+
+  function showHelpDialog() {
+    var dlg = new Window("dialog", "使い方 - emo2layer v2");
+    dlg.orientation = "column";
+    dlg.alignChildren = ["fill", "top"];
+    dlg.margins = 16;
+    dlg.spacing = 6;
+    var lines = [
+      "【基本的な流れ】",
+      "1. 対象コンポ: 切り替えたいレイヤーが入っているコンポを選択",
+      "2. 制御コンポ: マーカーを書き込むコンポを選択（同じでも可）",
+      "3. 「CTRL 作成」: 制御コンポに CTRLレイヤーを作成",
+      "4. 対象コンポ内でレイヤーを選択して「レイヤー登録」",
+      "   → Opacity にエクスプレッションが付きます",
+      "5. マーカーボタンをクリック",
+      "   → 現在の再生ヘッド位置に名前を書き込みます",
+      "   → 再クリックで選択解除",
+      "",
+      "【登録解除】",
+      "対象コンポ内で解除したいレイヤーを選択し「登録解除」",
+      "→ Opacity を 100% に戻し、エクスプレッションを削除します",
+      "",
+      "【ドロップダウン更新】",
+      "タイトル行の ↺ ボタンで対象・制御コンポ一覧を一括再取得します。",
+    ];
+    for (var i = 0; i < lines.length; i++) {
+      dlg.add("statictext", undefined, lines[i]);
+    }
+    dlg.add("button", undefined, "閉じる", { name: "ok" });
+    dlg.show();
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // イベントハンドラ
+  // ══════════════════════════════════════════════════════════════════
 
   helpBtn.onClick = function () {
     showHelpDialog();
   };
 
-  ctrlRow.button.onClick = function () {
+  // コンポ一覧を両方まとめて再取得
+  refreshAllBtn.onClick = function () {
+    var tCur = targetRow.dropdown.selection
+      ? targetRow.dropdown.selection.text
+      : null;
+    var cCur = ctrlRow.dropdown.selection
+      ? ctrlRow.dropdown.selection.text
+      : null;
+    rebuildDropdown(targetRow.dropdown, tCur);
+    rebuildDropdown(ctrlRow.dropdown, cCur);
+    rebuildList();
+    setStatus("コンポ一覧を更新しました。");
+  };
+
+  // CTRL 作成
+  ctrlRow.btn1.onClick = function () {
     var targetComp = getSelectedComp(targetRow.dropdown);
     var ctrlComp = getSelectedComp(ctrlRow.dropdown);
-
     if (!targetComp) {
       setStatus("対象コンポを選択してください。");
       return;
@@ -575,13 +673,13 @@
 
     var ctrlLayer = createCtrlLayer(ctrlComp, targetComp.name);
     rebuildList();
-    setStatus("CTRLを作成しました: " + ctrlComp.name + " / " + ctrlLayer.name);
+    setStatus("CTRL を作成しました: " + ctrlComp.name + " / " + ctrlLayer.name);
   };
 
-  targetRow.button.onClick = function () {
+  // レイヤー登録
+  targetRow.btn1.onClick = function () {
     var targetComp = getSelectedComp(targetRow.dropdown);
     var ctrlComp = getSelectedComp(ctrlRow.dropdown);
-
     if (!targetComp) {
       setStatus("対象コンポを選択してください。");
       return;
@@ -594,42 +692,62 @@
     var activeComp = getActiveComp();
     if (!activeComp || activeComp.name !== targetComp.name) {
       setStatus(
-        "レイヤー登録をするには、対象コンポをアクティブにしてください: " +
-          targetComp.name,
+        "対象コンポをアクティブにしてから登録してください: " + targetComp.name,
       );
       return;
     }
 
     var count = registerSelectedLayers(targetComp, ctrlComp.name);
     rebuildList();
-    setStatus(
-      count +
-        " レイヤーを登録しました。対象コンポで選択していたレイヤーが反映されています。",
-    );
+    setStatus(count + " レイヤーを登録しました。");
+  };
+
+  // 登録解除
+  targetRow.btn2.onClick = function () {
+    var targetComp = getSelectedComp(targetRow.dropdown);
+    if (!targetComp) {
+      setStatus("対象コンポを選択してください。");
+      return;
+    }
+
+    var activeComp = getActiveComp();
+    if (!activeComp || activeComp.name !== targetComp.name) {
+      setStatus(
+        "対象コンポをアクティブにしてから解除してください: " + targetComp.name,
+      );
+      return;
+    }
+
+    var count = unregisterSelectedLayers(targetComp);
+    rebuildList();
+    setStatus(count + " レイヤーの登録を解除しました。");
   };
 
   targetRow.dropdown.onChange = function () {
     rebuildList();
   };
-
   ctrlRow.dropdown.onChange = function () {
     rebuildList();
   };
-
   columnDropdown.onChange = function () {
     rebuildMarkerGrid();
   };
 
   win.onResizing = win.onResize = function () {
     this.layout.resize();
-    resizeGridButtons();
+    resizeGrid();
   };
 
-  var activeComp = getActiveComp();
-  var activeCompName = activeComp ? activeComp.name : null;
-  rebuildDropdown(targetRow.dropdown, activeCompName);
-  rebuildDropdown(ctrlRow.dropdown, activeCompName);
-  rebuildList();
+  // ══════════════════════════════════════════════════════════════════
+  // 初期化
+  // ══════════════════════════════════════════════════════════════════
+  (function init() {
+    var activeComp = getActiveComp();
+    var name = activeComp ? activeComp.name : null;
+    rebuildDropdown(targetRow.dropdown, name);
+    rebuildDropdown(ctrlRow.dropdown, name);
+    rebuildList();
+  })();
 
   if (win instanceof Window) {
     win.center();
