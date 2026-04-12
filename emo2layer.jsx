@@ -1,12 +1,12 @@
 /**
- * emo2layer.jsx
- * @version 1.0.0
+ * EmoLabMaker.jsx
+ * @version 1.1.0
  * @description レイヤー選択 + 口パク 統合パネル
  *   Tab 1 "レイヤー選択" : 指定レイヤーを登録し、任意の場所のマーカーで排他的に表示を切り替える
  *   Tab 2 "口パク"      : labファイルを解析して音素レイヤーを生成 + 不透明度エクスプレッションを設定するツール
  */
 
-(function emo2layer(thisObj) {
+(function emoLabMaker(thisObj) {
   // ════════════════════════════════════════════════════════════════
   // 共通定数
   // ════════════════════════════════════════════════════════════════
@@ -47,7 +47,7 @@
   var win =
     thisObj instanceof Panel
       ? thisObj
-      : new Window("palette", "emo2layer", undefined, { resizeable: true });
+      : new Window("palette", "emoLabMaker", undefined, { resizeable: true });
 
   win.orientation = "column";
   win.alignChildren = ["fill", "fill"];
@@ -646,7 +646,7 @@
   // ══════════════════════════════════════════════════════════════════
 
   function showHelpDialog() {
-    var dlg = new Window("dialog", "使い方 - emo2layer v2");
+    var dlg = new Window("dialog", "使い方 - EmoLabMaker");
     dlg.orientation = "column";
     dlg.alignChildren = ["fill", "top"];
     dlg.margins = 16;
@@ -940,7 +940,7 @@
     }
     var offsetSec = frames * frameSec;
 
-    app.beginUndoGroup("Adjust Markers");
+    app.beginUndoGroup("lab2layer: Adjust Markers");
 
     var totalAdjusted = 0;
     for (var i = 0; i < layers.length; i++) {
@@ -1207,7 +1207,7 @@
       }
     }
 
-    app.beginUndoGroup("音素レイヤーを作成");
+    app.beginUndoGroup("lab2layer: Create Phoneme Layer");
 
     // 音声レイヤーがなければヌルレイヤーを作成
     if (!targetLayer) {
@@ -1312,7 +1312,7 @@
 
     var targetCompName = compDropdown.selection.text;
 
-    app.beginUndoGroup("音素不透明度を設定");
+    app.beginUndoGroup("lab2layer: Setup Phoneme Opacity");
 
     for (var i = 0; i < layers.length; i++) {
       var layer = layers[i];
@@ -1383,7 +1383,7 @@
 
     var totalDeleted = 0;
 
-    app.beginUndoGroup("Delete Markers");
+    app.beginUndoGroup("lab2layer: Delete Markers");
 
     for (var i = 0; i < layers.length; i++) {
       var layer = layers[i];
