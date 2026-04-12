@@ -1,12 +1,12 @@
 /**
- * phoneme_suite.jsx
+ * emo2layer.jsx
  * @version 1.0.0
- * @description emo2layer + lab2layer 統合パネル
- *   Tab 1 "Selector" : 指定レイヤーを登録し、任意の場所のマーカーで排他的に表示を切り替える
- *   Tab 2 "Lab"      : labファイルを解析して音素レイヤーを生成 + 不透明度エクスプレッションを設定するツール
+ * @description レイヤー選択 + 口パク 統合パネル
+ *   Tab 1 "レイヤー選択" : 指定レイヤーを登録し、任意の場所のマーカーで排他的に表示を切り替える
+ *   Tab 2 "口パク"      : labファイルを解析して音素レイヤーを生成 + 不透明度エクスプレッションを設定するツール
  */
 
-(function phonemeSuite(thisObj) {
+(function emo2layer(thisObj) {
   // ════════════════════════════════════════════════════════════════
   // 共通定数
   // ════════════════════════════════════════════════════════════════
@@ -47,7 +47,7 @@
   var win =
     thisObj instanceof Panel
       ? thisObj
-      : new Window("palette", "Phoneme Suite", undefined, { resizeable: true });
+      : new Window("palette", "emo2layer", undefined, { resizeable: true });
 
   win.orientation = "column";
   win.alignChildren = ["fill", "fill"];
@@ -57,8 +57,8 @@
   var tabs = win.add("tabbedpanel");
   tabs.alignment = ["fill", "fill"];
 
-  var tabSelector = tabs.add("tab", undefined, "Selector");
-  var tabLab = tabs.add("tab", undefined, "Lab");
+  var tabSelector = tabs.add("tab", undefined, "レイヤー選択");
+  var tabLab = tabs.add("tab", undefined, "口パク");
 
   tabSelector.orientation = "column";
   tabSelector.alignChildren = ["fill", "top"];
@@ -74,14 +74,14 @@
 
   // ════════════════════════════════════════════════════════════════
   //
-  //  TAB 1 : Selector (emo2layer)
+  //  TAB 1 : emo2layer
   //
   // ════════════════════════════════════════════════════════════════
 
   // ══════════════════════════════════════════════════════════════════
   // 定数
   // ══════════════════════════════════════════════════════════════════
-  var CTRL_PREFIX = "[C] ";
+  var CTRL_PREFIX = "[Emo] ";
   var EXPR_SIGNATURE = "emo2layerCtrlMarker";
   var LABEL_WIDTH = 40;
   var DROPDOWN_MIN_W = 140;
@@ -337,28 +337,23 @@
   topRow.orientation = "row";
   topRow.alignment = ["fill", "top"];
   topRow.alignChildren = ["left", "center"];
-  topRow.spacing = 6;
+  topRow.spacing = 4;
 
-  var title = topRow.add("statictext", undefined, "レイヤーセレクター");
-  try {
-    title.graphics.font = ScriptUI.newFont(
-      title.graphics.font.name,
-      "BOLD",
-      title.graphics.font.size + 1,
-    );
-  } catch (e) {}
+  var targetStatusInfo = topRow.add("statictext", undefined, "対象 -");
+  var ctrlStatusInfo = topRow.add("statictext", undefined, "制御 -");
+  var ctrlLayerInfo = topRow.add("statictext", undefined, "CTRL -");
 
   var topSpacer = topRow.add("group");
   topSpacer.alignment = ["fill", "center"];
 
   var refreshAllBtn = topRow.add("button", undefined, "\u21BA");
   refreshAllBtn.alignment = ["right", "center"];
-  refreshAllBtn.preferredSize = [28, BUTTON_HEIGHT];
+  refreshAllBtn.preferredSize = [24, BUTTON_HEIGHT];
   refreshAllBtn.helpTip = "コンポ一覧を両方再取得";
 
-  var helpBtn = topRow.add("button", undefined, "Help");
+  var helpBtn = topRow.add("button", undefined, "ヘルプ");
   helpBtn.alignment = ["right", "center"];
-  helpBtn.preferredSize = [64, BUTTON_HEIGHT];
+  helpBtn.preferredSize = [52, BUTTON_HEIGHT];
 
   // ── コンポ選択行（共通ファクトリ） ──────────────────────────────
   function addCompRow(parent, labelText, btnText1, btnText2) {
@@ -390,16 +385,6 @@
 
   var targetRow = addCompRow(tabSelector, "対象", "レイヤー登録", "登録解除");
   var ctrlRow = addCompRow(tabSelector, "制御", "CTRL 作成", null);
-
-  // ── ステータス情報 ───────────────────────────────────────────────
-  var infoRow = tabSelector.add("group");
-  infoRow.orientation = "row";
-  infoRow.alignChildren = ["left", "center"];
-  infoRow.spacing = 12;
-
-  var targetStatusInfo = infoRow.add("statictext", undefined, "対象 -");
-  var ctrlStatusInfo = infoRow.add("statictext", undefined, "制御 -");
-  var ctrlLayerInfo = infoRow.add("statictext", undefined, "CTRL -");
 
   // ── グリッドヘッダー ─────────────────────────────────────────────
   var markerHeaderRow = tabSelector.add("group");
@@ -774,7 +759,7 @@
 
   // ════════════════════════════════════════════════════════════════
   //
-  //  TAB 2 : Lab (lab2layer)
+  //  TAB 2 : 口パク / 音素 (lab2layer)
   //
   // ════════════════════════════════════════════════════════════════
 
@@ -784,12 +769,12 @@
   fileSelectGroup.alignChildren = ["left", "center"];
   fileSelectGroup.alignment = ["fill", "top"];
 
-  fileSelectGroup.add("statictext", undefined, "Lab File:");
+  fileSelectGroup.add("statictext", undefined, "labファイル:");
 
   var filePathText = fileSelectGroup.add(
     "edittext",
     undefined,
-    "No file selected",
+    "ファイル未選択",
   );
   filePathText.alignment = ["fill", "center"];
   filePathText.enabled = false;
@@ -797,10 +782,10 @@
   var browseBtn = fileSelectGroup.add("button", undefined, "...");
   browseBtn.preferredSize = [30, 25];
   browseBtn.alignment = ["right", "center"];
-  browseBtn.helpTip = "Browse for lab file";
+  browseBtn.helpTip = "labファイルを選択";
 
   // ========== 音素リストグループ ==========
-  var phonemeListPanel = tabLab.add("panel", undefined, "Select Phonemes");
+  var phonemeListPanel = tabLab.add("panel", undefined, "音素を選択");
   phonemeListPanel.orientation = "column";
   phonemeListPanel.alignChildren = ["fill", "top"];
   phonemeListPanel.alignment = ["fill", "top"];
@@ -861,11 +846,11 @@
   phonemeSelectorGroup.alignChildren = ["fill", "center"];
   phonemeSelectorGroup.spacing = 5;
 
-  var selectAllBtn = phonemeSelectorGroup.add("button", undefined, "All");
+  var selectAllBtn = phonemeSelectorGroup.add("button", undefined, "すべて");
   selectAllBtn.alignment = ["fill", "center"];
-  var deselectAllBtn = phonemeSelectorGroup.add("button", undefined, "None");
+  var deselectAllBtn = phonemeSelectorGroup.add("button", undefined, "解除");
   deselectAllBtn.alignment = ["fill", "center"];
-  var selectCommonBtn = phonemeSelectorGroup.add("button", undefined, "Common");
+  var selectCommonBtn = phonemeSelectorGroup.add("button", undefined, "簡易選択");
   selectCommonBtn.alignment = ["fill", "center"];
 
   // ========== オフセット設定グループ ==========
@@ -875,7 +860,7 @@
   offsetGroup.alignChildren = ["left", "center"];
   offsetGroup.spacing = 5;
 
-  var offsetLabel = offsetGroup.add("statictext", undefined, "Offset (ms):");
+  var offsetLabel = offsetGroup.add("statictext", undefined, "オフセット (ms):");
   offsetLabel.alignment = ["left", "center"];
 
   var offsetInput = offsetGroup.add("edittext", undefined, "-67");
@@ -916,7 +901,7 @@
   function adjustMarkersByFrames(frames) {
     var comp = app.project.activeItem;
     if (!comp) {
-      alert("Please select a composition");
+      alert("コンポジションを選択してください");
       return;
     }
 
@@ -978,7 +963,7 @@
 
   // ファイル選択
   browseBtn.onClick = function () {
-    labFile = File.openDialog("Select lab file", "*.lab");
+    labFile = File.openDialog("labファイルを選択", "*.lab");
     if (!labFile) return;
 
     filePathText.text = decodeURI(labFile.name);
@@ -1150,7 +1135,7 @@
   createBtn.onClick = function () {
     var comp = app.project.activeItem;
     if (!comp) {
-      alert("Please select a composition");
+      alert("コンポジションを選択してください");
       return;
     }
 
@@ -1169,7 +1154,7 @@
     }
 
     if (selectedPhonemes.length === 0) {
-      alert("Please select at least one phoneme");
+      alert("少なくとも1つの音素を選択してください");
       return;
     }
 
@@ -1199,7 +1184,7 @@
       }
     }
 
-    app.beginUndoGroup("Create Phoneme Layer");
+    app.beginUndoGroup("音素レイヤーを作成");
 
     // 音声レイヤーがなければヌルレイヤーを作成
     if (!targetLayer) {
@@ -1207,13 +1192,13 @@
       // labファイル名から拡張子を除いた名前を使用
       var layerName = labFile
         ? decodeURI(labFile.name).replace(/\.lab$/i, "")
-        : "Phoneme";
-      targetLayer.name = "[P] " + layerName;
+        : "音素";
+      targetLayer.name = "[Lab] " + layerName;
       targetLayer.startTime = attachTime;
     } else {
-      // 既存レイヤーに[P]プレフィックスがなければ追加
-      if (targetLayer.name.indexOf("[P] ") !== 0) {
-        targetLayer.name = "[P] " + targetLayer.name;
+      // 既存レイヤーに[Lab]プレフィックスがなければ追加
+      if (targetLayer.name.indexOf("[Lab] ") !== 0) {
+        targetLayer.name = "[Lab] " + targetLayer.name;
       }
     }
 
@@ -1239,13 +1224,13 @@
     app.endUndoGroup();
 
     var message =
-      "Phoneme markers added: " +
+      "音素マーカーを追加: " +
       selectedPhonemes.length +
       "\n" +
-      "Duration: " +
+      "長さ: " +
       duration.toFixed(2) +
       "s\n" +
-      "Target: " +
+      "対象: " +
       targetLayer.name;
     alert(message);
   };
@@ -1254,13 +1239,13 @@
   setupOpacityBtn.onClick = function () {
     var comp = app.project.activeItem;
     if (!comp) {
-      alert("Please select a composition");
+      alert("コンポジションを選択してください");
       return;
     }
 
     var layers = comp.selectedLayers;
     if (layers.length === 0) {
-      alert("Please select image layers");
+      alert("画像レイヤーを選択してください");
       return;
     }
 
@@ -1274,11 +1259,11 @@
     }
 
     // コンポジション選択ダイアログ
-    var dialog = new Window("dialog", "Select Phoneme Composition");
+    var dialog = new Window("dialog", "音素コンポを選択");
     dialog.orientation = "column";
     dialog.alignChildren = ["fill", "top"];
 
-    dialog.add("statictext", undefined, "Phoneme layer location:");
+    dialog.add("statictext", undefined, "音素レイヤーの場所:");
     var compDropdown = dialog.add("dropdownlist", undefined, compNames);
 
     // 現在のコンポジションをデフォルト選択
@@ -1294,17 +1279,17 @@
 
     var dialogBtnGroup = dialog.add("group");
     dialogBtnGroup.add("button", undefined, "OK", { name: "ok" });
-    dialogBtnGroup.add("button", undefined, "Cancel", { name: "cancel" });
+    dialogBtnGroup.add("button", undefined, "キャンセル", { name: "cancel" });
 
     if (dialog.show() !== 1) return;
     if (!compDropdown.selection) {
-      alert("Please select a composition");
+      alert("コンポジションを選択してください");
       return;
     }
 
     var targetCompName = compDropdown.selection.text;
 
-    app.beginUndoGroup("Setup Phoneme Opacity");
+    app.beginUndoGroup("音素不透明度を設定");
 
     for (var i = 0; i < layers.length; i++) {
       var layer = layers[i];
@@ -1315,7 +1300,7 @@
         "function findPhonemeLayer() {",
         "  for (var i = 1; i <= targetComp.numLayers; i++) {",
         "    var layer = targetComp.layer(i);",
-        '    if (layer.name.indexOf("[P] ") !== 0) continue;',
+        '    if (layer.name.indexOf("[Lab] ") !== 0) continue;',
         "    if (layer.marker.numKeys === 0) continue;",
         "    if (time < layer.inPoint || time >= layer.outPoint) continue;",
         "    return layer;",
@@ -1352,9 +1337,9 @@
 
     app.endUndoGroup();
     alert(
-      "Completed! Set expression on " +
+      "完了: " +
         layers.length +
-        " layers.\nPhoneme source: " +
+        " レイヤーにエクスプレッションを設定しました。\n音素ソース: " +
         targetCompName,
     );
   };
@@ -1363,7 +1348,7 @@
   deleteMarkersBtn.onClick = function () {
     var comp = app.project.activeItem;
     if (!comp) {
-      alert("Please select a composition");
+      alert("コンポジションを選択してください");
       return;
     }
 
@@ -1388,8 +1373,8 @@
         totalDeleted++;
       }
 
-      // マーカーが全て削除されたら[P]プレフィックスを削除
-      if (numMarkers > 0 && layer.name.indexOf("[P] ") === 0) {
+      // マーカーが全て削除されたら[Lab]プレフィックスを削除
+      if (numMarkers > 0 && layer.name.indexOf("[Lab] ") === 0) {
         layer.name = layer.name.substring(4);
       }
     }
