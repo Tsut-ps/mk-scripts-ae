@@ -310,9 +310,6 @@
   }
 
   function getGridColumns() {
-    if (columnDropdown.selection && columnDropdown.selection.text !== "Auto") {
-      return parseInt(columnDropdown.selection.text, 10) || 2;
-    }
     var width = markerGridPanel.size ? markerGridPanel.size.width : 360;
     var columns = Math.floor(width / (GRID_MIN_BTN_W + GRID_SPACING));
     if (columns < 1) columns = 1;
@@ -339,9 +336,17 @@
   topRow.alignChildren = ["left", "center"];
   topRow.spacing = 4;
 
-  var targetStatusInfo = topRow.add("statictext", undefined, "対象 -");
-  var ctrlStatusInfo = topRow.add("statictext", undefined, "制御 -");
-  var ctrlLayerInfo = topRow.add("statictext", undefined, "CTRL -");
+  topRow.add("statictext", undefined, "対象");
+  var targetStatusInfo = topRow.add("statictext", undefined, "");
+  targetStatusInfo.preferredSize = [16, BUTTON_HEIGHT];
+
+  topRow.add("statictext", undefined, "制御");
+  var ctrlStatusInfo = topRow.add("statictext", undefined, "");
+  ctrlStatusInfo.preferredSize = [16, BUTTON_HEIGHT];
+
+  topRow.add("statictext", undefined, "Emo");
+  var ctrlLayerInfo = topRow.add("statictext", undefined, "");
+  ctrlLayerInfo.preferredSize = [16, BUTTON_HEIGHT];
 
   var topSpacer = topRow.add("group");
   topSpacer.alignment = ["fill", "center"];
@@ -392,21 +397,11 @@
   markerHeaderRow.alignChildren = ["left", "center"];
   markerHeaderRow.spacing = 10;
 
-  var markerCountInfo = markerHeaderRow.add(
+  var registeredCountInfo = markerHeaderRow.add(
     "statictext",
     undefined,
-    "登録レイヤー: 0 / マーカー数: 0",
+    "登録レイヤー: 0",
   );
-  markerHeaderRow.add("statictext", undefined, "列");
-
-  var columnDropdown = markerHeaderRow.add("dropdownlist", undefined, [
-    "Auto",
-    "1",
-    "2",
-    "3",
-    "4",
-  ]);
-  columnDropdown.selection = 0;
 
   // ── マーカーグリッド ─────────────────────────────────────────────
   var markerGridPanel = tabSelector.add("panel");
@@ -485,14 +480,10 @@
         ? findCtrlLayerInComp(ctrlComp, targetComp.name, targetComp.time)
         : null;
 
-    targetStatusInfo.text = targetComp ? "対象 OK" : "対象 -";
-    ctrlStatusInfo.text = ctrlComp ? "制御 OK" : "制御 -";
-    ctrlLayerInfo.text = ctrlLayer ? "CTRL OK" : "CTRL -";
-    markerCountInfo.text =
-      "登録レイヤー: " +
-      countRegisteredLayers(targetComp) +
-      " / マーカー数: " +
-      currentMarkerNames.length;
+    targetStatusInfo.text = targetComp ? "✓" : "";
+    ctrlStatusInfo.text = ctrlComp ? "✓" : "";
+    ctrlLayerInfo.text = ctrlLayer ? "✓" : "";
+    registeredCountInfo.text = "登録レイヤー: " + countRegisteredLayers(targetComp);
   }
 
   // ── ドロップダウン再構築 ─────────────────────────────────────────
@@ -753,9 +744,6 @@
   ctrlRow.dropdown.onChange = function () {
     rebuildList();
   };
-  columnDropdown.onChange = function () {
-    rebuildMarkerGrid();
-  };
 
   // ════════════════════════════════════════════════════════════════
   //
@@ -850,7 +838,11 @@
   selectAllBtn.alignment = ["fill", "center"];
   var deselectAllBtn = phonemeSelectorGroup.add("button", undefined, "解除");
   deselectAllBtn.alignment = ["fill", "center"];
-  var selectCommonBtn = phonemeSelectorGroup.add("button", undefined, "簡易選択");
+  var selectCommonBtn = phonemeSelectorGroup.add(
+    "button",
+    undefined,
+    "簡易選択",
+  );
   selectCommonBtn.alignment = ["fill", "center"];
 
   // ========== オフセット設定グループ ==========
@@ -860,7 +852,11 @@
   offsetGroup.alignChildren = ["left", "center"];
   offsetGroup.spacing = 5;
 
-  var offsetLabel = offsetGroup.add("statictext", undefined, "オフセット (ms):");
+  var offsetLabel = offsetGroup.add(
+    "statictext",
+    undefined,
+    "オフセット (ms):",
+  );
   offsetLabel.alignment = ["left", "center"];
 
   var offsetInput = offsetGroup.add("edittext", undefined, "-67");
