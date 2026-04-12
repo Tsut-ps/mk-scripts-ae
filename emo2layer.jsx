@@ -99,7 +99,7 @@
   }
 
   // ══════════════════════════════════════════════════════════════════
-  // CTRL レイヤー ユーティリティ
+  // 制御レイヤー ユーティリティ
   // ══════════════════════════════════════════════════════════════════
 
   function getCtrlLayerName(targetCompName) {
@@ -107,7 +107,7 @@
   }
 
   /**
-   * ctrlComp 内で time に有効な CTRL レイヤーを探す。
+   * ctrlComp 内で time に有効な制御レイヤーを探す。
    * 時刻に合うものがなければ最初に見つかったもの（フォールバック）を返す。
    */
   function findCtrlLayerInComp(ctrlComp, targetCompName, time) {
@@ -124,7 +124,7 @@
   }
 
   /**
-   * CTRL レイヤーを作成する。
+   * 制御レイヤーを作成する。
    * inPoint の直接代入は読み取り専用になるバージョンがあるため
    * startTime を操作してコンプ全体をカバーさせる。
    */
@@ -416,8 +416,8 @@
     return { dropdown: dropdown, btn1: btn1, btn2: btn2 };
   }
 
-  var targetRow = addCompRow(tabSelector, "対象", "レイヤー登録", "登録解除");
-  var ctrlRow = addCompRow(tabSelector, "制御", "CTRL 作成", null);
+  var targetRow = addCompRow(tabSelector, "対象", "登録", "解除");
+  var ctrlRow = addCompRow(tabSelector, "制御", "制御レイヤー作成", null);
 
   // ── グリッドヘッダー ─────────────────────────────────────────────
   var markerHeaderRow = tabSelector.add("group");
@@ -471,9 +471,9 @@
 
   /**
    * 前提条件に応じてボタンの有効・無効を更新する
-   *   - CTRL 作成: 対象＋制御コンポが揃っていること
+   *   - 制御レイヤー作成: 対象＋制御コンポが揃っていること
    *   - レイヤー登録/解除: 対象＋制御コンポ＋アクティブコンプが対象と一致
-   *   - マーカーボタン: 対象＋制御コンプ＋CTRLレイヤーが揃っていること
+   *   - マーカーボタン: 対象＋制御コンプ＋制御レイヤーが揃っていること
    */
   function updateButtonStates() {
     var targetComp = getSelectedComp(targetRow.dropdown);
@@ -655,7 +655,7 @@
       "【基本的な流れ】",
       "1. 対象コンポ: 切り替えたいレイヤーが入っているコンポを選択",
       "2. 制御コンポ: マーカーを書き込むコンポを選択（同じでも可）",
-      "3. 「CTRL 作成」: 制御コンポに CTRLレイヤーを作成",
+      "3. 「制御レイヤー作成」: 制御コンポに制御レイヤーを作成",
       "4. 対象コンポ内でレイヤーを選択して「レイヤー登録」",
       "   → Opacity にエクスプレッションが付きます",
       "5. マーカーボタンをクリック",
@@ -698,7 +698,7 @@
     setStatus("コンポ一覧を更新しました。");
   };
 
-  // CTRL 作成
+  // 制御レイヤー作成
   ctrlRow.btn1.onClick = function () {
     var targetComp = getSelectedComp(targetRow.dropdown);
     var ctrlComp = getSelectedComp(ctrlRow.dropdown);
@@ -713,7 +713,9 @@
 
     var ctrlLayer = createCtrlLayer(ctrlComp, targetComp.name);
     rebuildList();
-    setStatus("CTRL を作成しました: " + ctrlComp.name + " / " + ctrlLayer.name);
+    setStatus(
+      "制御レイヤーを作成しました: " + ctrlComp.name + " / " + ctrlLayer.name,
+    );
   };
 
   // レイヤー登録
@@ -861,14 +863,14 @@
 
   var selectAllBtn = phonemeSelectorGroup.add("button", undefined, "すべて");
   selectAllBtn.alignment = ["fill", "center"];
-  var deselectAllBtn = phonemeSelectorGroup.add("button", undefined, "解除");
-  deselectAllBtn.alignment = ["fill", "center"];
   var selectCommonBtn = phonemeSelectorGroup.add(
     "button",
     undefined,
-    "簡易選択",
+    "かんたん",
   );
   selectCommonBtn.alignment = ["fill", "center"];
+  var deselectAllBtn = phonemeSelectorGroup.add("button", undefined, "解除");
+  deselectAllBtn.alignment = ["fill", "center"];
 
   // ========== オフセット設定グループ ==========
   var offsetGroup = tabLab.add("group");
@@ -906,14 +908,14 @@
   executeGroup.alignChildren = ["fill", "center"];
   executeGroup.spacing = 10;
 
-  var createBtn = executeGroup.add("button", undefined, "Create");
+  var createBtn = executeGroup.add("button", undefined, "音素配置");
   createBtn.alignment = ["fill", "center"];
   createBtn.enabled = false;
 
-  var deleteMarkersBtn = executeGroup.add("button", undefined, "Delete");
+  var deleteMarkersBtn = executeGroup.add("button", undefined, "一括削除");
   deleteMarkersBtn.alignment = ["fill", "center"];
 
-  var setupOpacityBtn = executeGroup.add("button", undefined, "Setup Opacity");
+  var setupOpacityBtn = executeGroup.add("button", undefined, "口パク設定");
   setupOpacityBtn.alignment = ["fill", "center"];
 
   // ========== イベントハンドラ ==========
@@ -928,7 +930,7 @@
 
     var layers = comp.selectedLayers;
     if (layers.length === 0) {
-      alert("Please select layer(s) with markers");
+      alert("マーカーのあるレイヤーを選択してください");
       return;
     }
 
@@ -1280,11 +1282,11 @@
     }
 
     // コンポジション選択ダイアログ
-    var dialog = new Window("dialog", "音素コンポを選択");
+    var dialog = new Window("dialog", "コンポジションを選択");
     dialog.orientation = "column";
     dialog.alignChildren = ["fill", "top"];
 
-    dialog.add("statictext", undefined, "音素レイヤーの場所:");
+    dialog.add("statictext", undefined, "制御レイヤーのある場所:");
     var compDropdown = dialog.add("dropdownlist", undefined, compNames);
 
     // 現在のコンポジションをデフォルト選択
